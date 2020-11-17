@@ -1,0 +1,86 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 4da92a575e507917c210b141a052cc036d9163886d0ba41f3fb868187fa1879b
+
+name:           boltlang
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/boltlang#readme>
+homepage:       https://github.com/boltlang/ProtoBolt#readme
+bug-reports:    https://github.com/boltlang/ProtoBolt/issues
+author:         Sam Vervaeck
+maintainer:     samvv@pm.me
+copyright:      2020 Sam Vervaeck
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/boltlang/ProtoBolt
+
+library
+  exposed-modules:
+      Language.Bolt.Compiler
+      Language.Bolt.CST
+      Language.Bolt.Frontend
+      Language.Bolt.Parser
+      Language.Bolt.Types
+  other-modules:
+      Paths_boltlang
+  hs-source-dirs:
+      src
+  default-extensions: OverloadedStrings NamedFieldPuns
+  build-depends:
+      base >=4.7 && <5
+    , bytestring
+    , containers
+    , megaparsec
+    , text
+    , transformers
+  default-language: Haskell2010
+
+executable bolt
+  main-is: Main.hs
+  other-modules:
+      Paths_boltlang
+  hs-source-dirs:
+      app
+  default-extensions: OverloadedStrings NamedFieldPuns
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , boltlang
+    , bytestring
+    , containers
+    , megaparsec
+    , text
+    , transformers
+  default-language: Haskell2010
+
+test-suite boltlang-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      ParserSpec
+      Paths_boltlang
+  hs-source-dirs:
+      test
+  default-extensions: OverloadedStrings NamedFieldPuns
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , boltlang
+    , bytestring
+    , containers
+    , hspec
+    , megaparsec
+    , text
+    , transformers
+  default-language: Haskell2010

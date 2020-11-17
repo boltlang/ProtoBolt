@@ -1,0 +1,8 @@
+cradle:
+  stack:
+    - path: './src'
+      component: boltlang:lib
+    - path: './test'
+      component: boltlang:test:boltlang-test
+    - path: './app'
+      component: boltlang:exe:bolt
