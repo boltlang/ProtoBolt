@@ -28,7 +28,7 @@ dependencies:
 - megaparsec
 - bytestring
 - text
-- transformers
+- mtl
 - containers
 
 library:

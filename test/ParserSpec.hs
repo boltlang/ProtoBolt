@@ -28,7 +28,7 @@ spec = do
       testParse pIdentifier "bax__1" `shouldBe` Right (Identifier "bax__1" (0, 6))
     it "can parse a statement block" $ do
       testParse pBlock "{}" `shouldBe` Right (Block (OpenBrace (0, 1)) [] (CloseBrace (1, 2)) (0, 2))
-    it "can parse a function declaration" $ do
+    it "can parse an empty function declaration" $ do
       testParse pFunctionDeclaration "fn foo() -> Int" `shouldBe`
         Right (FunctionDeclaration
           (FunctionKeyword (0, 2))

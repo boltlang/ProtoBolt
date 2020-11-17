@@ -1,6 +1,6 @@
 module Language.Bolt.Frontend where
 
-import Control.Monad.Trans.State (modify)
+import Control.Monad.State (modify)
 import Text.Megaparsec (runParserT)
 import qualified Data.Text as T
 

@@ -1,21 +1,28 @@
 module Language.Bolt.Compiler where
 
+import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Data.Void (Void)
-import Control.Monad.Trans.State
-import Control.Monad.Trans.Except
+import Control.Monad.State
+import Control.Monad.Except
 import Text.Megaparsec.Error (ParseErrorBundle)
 
+import Language.Bolt.Type
 import Language.Bolt.CST
 
 data CompilerError
   = ParseError
+  | TypeError
     deriving (Eq, Show)
 
 data Diagnostic
   = ParseDiagnostic {
       errorBundle :: ParseErrorBundle T.Text Void
+    }
+  | InfiniteTypeDiagnostic {
+      varName :: BS.ByteString,
+      ty :: Type
     }
 
 data CompilerState = CompilerState {
