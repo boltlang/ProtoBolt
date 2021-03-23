@@ -1,7 +1,7 @@
 name:                boltlang
 version:             0.1.0.0
 github:              "boltlang/ProtoBolt"
-license:             BSD3
+license:             GPL3
 author:              "Sam Vervaeck"
 maintainer:          "samvv@pm.me"
 copyright:           "2020 Sam Vervaeck"

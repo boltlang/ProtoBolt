@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: aec14fd8543eb280fdbf6e9539692b7b6030f2f6c6b067cda0ae82eed9e4ae01
+-- hash: 09aaef92ffca287230829df9fddb9d1a7db66af97fb8c13c00c35e807189d154
 
 name:           boltlang
 version:        0.1.0.0
@@ -14,7 +14,7 @@ bug-reports:    https://github.com/boltlang/ProtoBolt/issues
 author:         Sam Vervaeck
 maintainer:     samvv@pm.me
 copyright:      2020 Sam Vervaeck
-license:        BSD3
+license:        GPL3
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
