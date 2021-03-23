@@ -22,6 +22,7 @@ description:         Please see the README on GitHub at <https://github.com/gith
 default-extensions:
 - OverloadedStrings
 - NamedFieldPuns
+- DeriveGeneric
 
 dependencies:
 - base >= 4.7 && < 5
@@ -30,6 +31,10 @@ dependencies:
 - text
 - mtl
 - containers
+- unordered-containers
+- hashable
+- optparse-applicative
+- aeson
 
 library:
   source-dirs: src

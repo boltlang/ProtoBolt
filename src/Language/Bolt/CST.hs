@@ -1,5 +1,10 @@
 module Language.Bolt.CST where
 
+import GHC.Generics (Generic)
+import Data.Hashable
+import qualified Data.Aeson as JSON
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString as BS
 
 data Node
@@ -12,6 +17,12 @@ data Node
       returnTypeExpr :: Maybe (Node, Node),
       body :: Maybe Node,
       offsets :: (Int, Int)
+    }
+  | Param {
+      bindings :: Node,
+      typeExpr :: Maybe (Node, Node),
+      defaultValue :: Maybe (Node, Node),
+      span :: (Int, Int)
     }
   | Block {
       openBrace :: Node,
@@ -127,10 +138,39 @@ data Node
       expr :: Node,
       offsets :: (Int, Int)
     }
-  deriving (Eq, Ord, Show)
+  | ReturnStatement {
+      returnKeyword :: Node,
+      expr :: Node,
+      span :: (Int, Int)
+    }
+  deriving (Eq, Ord, Show, Generic)
+
+data NodeType
+  = TExpression
+  | TSourceFile
+  | TSourceElement
+  | TFunctionBodyElement
+  | TFunctionDeclaration
+  | TReturnStatement
+
+instance Hashable Node
+
+instance JSON.ToJSON BS.ByteString where
+  toJSON s = JSON.String $ TE.decodeUtf8 s
+
+instance JSON.ToJSON Node where
+  toEncoding = JSON.genericToEncoding opts
+    where
+      opts = JSON.defaultOptions {
+          JSON.sumEncoding = JSON.TaggedObject {
+            JSON.tagFieldName = "type",
+            JSON.contentsFieldName = "value"
+          }
+        }
 
 startOffset :: Node -> Int
 startOffset = fst . offsets
 
 endOffset :: Node -> Int
 endOffset = snd . offsets
+

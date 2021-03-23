@@ -112,7 +112,7 @@ pFunctionDeclaration
        let params = []
        closeParen <- pCloseParen
        returnTypeExpr <- optional $ (,) <$> pRarrowSign <*> pTypeExpr
-       body <- optional $ pBlock
+       body <- optional pBlock
        p2 <- getOffset
        return $ FunctionDeclaration
           fnKeyword
@@ -144,7 +144,7 @@ pIdentifier
        p2 <- getOffset
        sc
        return $ Identifier (TE.encodeUtf8 text) (p1, p2)
-  where p = (T.cons) <$> pIdentStart <*> takeWhileP (Just "a letter or digit") isIdentPart
+  where p = T.cons <$> pIdentStart <*> takeWhileP (Just "a letter or digit") isIdentPart
         check x = if x `elem` rws
                   then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                   else return ()
