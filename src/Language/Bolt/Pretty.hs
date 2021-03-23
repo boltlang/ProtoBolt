@@ -8,9 +8,9 @@ import Language.Bolt.Compiler
 class Pretty a where
   pretty :: a -> String
 
-instance Pretty DiagnosticBundle where
-  pretty (DiagnosticBundle ds) = intercalate "\n\n" $ map pretty ds
+-- instance Pretty DiagnosticBundle where
+--   pretty (DiagnosticBundle ds) = intercalate "\n\n" $ map pretty ds
 
 instance Pretty Diagnostic where
-  pretty (ParseDiagnostic errorBundle) = "error: " <> errorBundlePretty errorBundle
+  pretty (ParseError fName fLine fcolumn actual expected) = "error: expected " 
 

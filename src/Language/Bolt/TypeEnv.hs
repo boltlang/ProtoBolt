@@ -5,7 +5,7 @@ import qualified Data.Map as Map
 
 import Language.Bolt.Type
 
-data TypeEnv
+newtype TypeEnv
   = TypeEnv { types :: Map.Map BS.ByteString Scheme }
   deriving (Eq, Show)
 

@@ -23,6 +23,8 @@ default-extensions:
 - OverloadedStrings
 - NamedFieldPuns
 - DeriveGeneric
+- LambdaCase
+- GADTs
 
 dependencies:
 - base >= 4.7 && < 5
@@ -35,6 +37,7 @@ dependencies:
 - hashable
 - optparse-applicative
 - aeson
+- transformers
 
 library:
   source-dirs: src

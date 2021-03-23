@@ -1,18 +1,16 @@
 module ParserSpec where
 
 import qualified Data.Text as T
+import Data.Maybe (fromMaybe)
 import Test.Hspec
-import Text.Megaparsec
 import Language.Bolt.CST
 import Language.Bolt.Parser
-import Language.Bolt.Compiler
+import Language.Bolt.Compiler (runCompiler)
+import Language.Bolt.Frontend (parse)
 
-testParse :: Parser a -> T.Text -> Either DiagnosticBundle a
+testParse :: Parser a -> T.Text -> Maybe a
 testParse p s
-  = case runCompiler $ runParserT p "#<anonumous>" s of
-      (diags, Nothing) -> error $ show diags
-      (diags, Just (Left errorBundle)) -> error $ errorBundlePretty errorBundle
-      (diags, Just (Right x)) -> Right x
+  = fromMaybe Nothing $ snd $ runCompiler $ parse p "#<anonumous>" s
 
 mkRefNode name offsets
   = ReferenceExpression (Identifier name offsets) offsets
@@ -23,17 +21,17 @@ spec = do
   describe "a Bolt language parser" $ do
 
     it "can parse an identifier" $ do
-      testParse pIdentifier "foo" `shouldBe` Right (Identifier "foo" (0, 3))
-      testParse pIdentifier "bar" `shouldBe` Right (Identifier "bar" (0, 3))
-      testParse pIdentifier "bax123" `shouldBe` Right (Identifier "bax123" (0, 6))
-      testParse pIdentifier "bax__1" `shouldBe` Right (Identifier "bax__1" (0, 6))
+      testParse pIdentifier "foo" `shouldBe` Just (Identifier "foo" (0, 3))
+      testParse pIdentifier "bar" `shouldBe` Just (Identifier "bar" (0, 3))
+      testParse pIdentifier "bax123" `shouldBe` Just (Identifier "bax123" (0, 6))
+      testParse pIdentifier "bax__1" `shouldBe` Just (Identifier "bax__1" (0, 6))
 
     it "can parse a statement block" $ do
-      testParse pBlock "{}" `shouldBe` Right (Block (OpenBrace (0, 1)) [] (CloseBrace (1, 2)) (0, 2))
+      testParse pBlock "{}" `shouldBe` Just (Block (OpenBrace (0, 1)) [] (CloseBrace (1, 2)) (0, 2))
 
     it "can parse an empty function declaration" $ do
       testParse pFunctionDeclaration "fn foo() -> Int" `shouldBe`
-        Right (FunctionDeclaration
+        Just (FunctionDeclaration
           (FunctionKeyword (0, 2))
           (Identifier "foo" (3, 6))
           (OpenParen (6, 7))
@@ -43,7 +41,7 @@ spec = do
           Nothing
           (0, 15))
       testParse pFunctionDeclaration "fn foo() {}" `shouldBe`
-        Right (FunctionDeclaration
+        Just (FunctionDeclaration
           (FunctionKeyword (0, 2))
           (Identifier "foo" (3, 6))
           (OpenParen (6, 7))
@@ -55,13 +53,13 @@ spec = do
 
     it "can parse a simple reference expression" $ do
       testParse pExpression "foo" `shouldBe`
-        Right (ReferenceExpression
+        Just (ReferenceExpression
           (Identifier "foo" (0, 3))
           (0, 3))
 
     it "can correctly parse operator precedence" $ do
       testParse pExpression "a + b / c * d - e" `shouldBe` 
-        Right (InfixExpression
+        Just (InfixExpression
           (InfixExpression
             (mkRefNode "a" (0, 1))
             (PlusSign (2, 3))

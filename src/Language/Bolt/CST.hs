@@ -18,11 +18,21 @@ data Node
       body :: Maybe Node,
       offsets :: (Int, Int)
     }
+  | FunctionExpression {
+      params :: [Node],
+      returnTypeExpr :: Maybe (Node, Node),
+      expr :: Node,
+      offsets :: (Int, Int)
+    }
   | Param {
       bindings :: Node,
       typeExpr :: Maybe (Node, Node),
       defaultValue :: Maybe (Node, Node),
-      span :: (Int, Int)
+      offsets :: (Int, Int)
+    }
+  | BindPattern {
+      name :: Node,
+      offsets :: (Int, Int)
     }
   | Block {
       openBrace :: Node,
@@ -34,7 +44,8 @@ data Node
       letKeyword :: Node,
       typeExpr :: Maybe (Node, Node),
       bindings :: Node,
-      valueExpr :: Maybe (Node, Node)
+      valueExpr :: Maybe (Node, Node),
+      offsets :: (Int, Int)
     }
   | TypeReferenceExpression {
       name :: Node,
@@ -75,8 +86,8 @@ data Node
       offsets :: (Int, Int)
     }
   | PlusSign {
-    offsets :: (Int, Int)
-  }
+      offsets :: (Int, Int)
+    }
   | MinusSign {
       offsets :: (Int, Int)
     }
@@ -141,7 +152,7 @@ data Node
   | ReturnStatement {
       returnKeyword :: Node,
       expr :: Node,
-      span :: (Int, Int)
+      offsets :: (Int, Int)
     }
   deriving (Eq, Ord, Show, Generic)
 

@@ -9,7 +9,7 @@ data Type
   = TVar TVar
   | TCon BS.ByteString
   | TArr Type Type
-  | TRef Type
+  | TAny
   deriving (Show, Eq, Ord)
 
 data Scheme

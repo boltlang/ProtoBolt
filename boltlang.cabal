@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3159d71f654acdde6f1c1e73a8ade95c92a6e8018cc81cccba83848b48343fd2
+-- hash: aec14fd8543eb280fdbf6e9539692b7b6030f2f6c6b067cda0ae82eed9e4ae01
 
 name:           boltlang
 version:        0.1.0.0
@@ -42,7 +42,7 @@ library
       Paths_boltlang
   hs-source-dirs:
       src
-  default-extensions: OverloadedStrings NamedFieldPuns DeriveGeneric
+  default-extensions: OverloadedStrings NamedFieldPuns DeriveGeneric LambdaCase GADTs
   build-depends:
       aeson
     , base >=4.7 && <5
@@ -53,6 +53,7 @@ library
     , mtl
     , optparse-applicative
     , text
+    , transformers
     , unordered-containers
   default-language: Haskell2010
 
@@ -62,7 +63,7 @@ executable bolt
       Paths_boltlang
   hs-source-dirs:
       app
-  default-extensions: OverloadedStrings NamedFieldPuns DeriveGeneric
+  default-extensions: OverloadedStrings NamedFieldPuns DeriveGeneric LambdaCase GADTs
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
@@ -75,6 +76,7 @@ executable bolt
     , mtl
     , optparse-applicative
     , text
+    , transformers
     , unordered-containers
   default-language: Haskell2010
 
@@ -87,7 +89,7 @@ test-suite boltlang-test
       Paths_boltlang
   hs-source-dirs:
       test
-  default-extensions: OverloadedStrings NamedFieldPuns DeriveGeneric
+  default-extensions: OverloadedStrings NamedFieldPuns DeriveGeneric LambdaCase GADTs
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
@@ -101,5 +103,6 @@ test-suite boltlang-test
     , mtl
     , optparse-applicative
     , text
+    , transformers
     , unordered-containers
   default-language: Haskell2010

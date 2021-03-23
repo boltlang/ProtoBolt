@@ -6,38 +6,31 @@ module Language.Bolt.Infer where
 
 import Control.Monad (replicateM)
 import Control.Monad.State
-import Control.Monad.Reader
+import Control.Monad.Writer
 import Control.Monad.Except
 import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.List (nub)
 
-import qualified Language.Bolt.TypeEnv as TE
+import qualified Language.Bolt.TypeEnv as TypeEnv
 import Language.Bolt.Common
-import Language.Bolt.AST
+import Language.Bolt.Compiler (Diagnostic(..), Compiler, addDiagnostic)
+import Language.Bolt.CST
 import Language.Bolt.Type
 
-data TypeError
-  = UnificationFail Type Type
-  | InfiniteType TVar Type
-  | UnboundVariable BS.ByteString
-  | Ambigious [Constraint]
-  | UnificationMismatch [Type] [Type]
-  deriving (Eq, Show)
+type Infer a = WriterT (Endo [Constraint]) (StateT InferState Compiler) a
 
-type Infer a = (ReaderT TE.TypeEnv (StateT InferState (Except TypeError))) a
-
-data InferState = InferState { count :: Int }
-
-initInfer :: InferState
-initInfer = InferState { count = 0 }
+data InferState = InferState {
+    typeVarCount :: Int,
+    typeEnv :: TypeEnv.TypeEnv
+  }
 
 type Constraint = (Type, Type)
 
 type Unifier = (Subst, [Constraint])
 
-type Solve a = Except TypeError a
+type Solve a = Except Diagnostic a
 
 newtype Subst = Subst (Map.Map TVar Type)
   deriving (Eq, Ord, Show, Semigroup, Monoid)
@@ -71,37 +64,43 @@ instance Substitutable a => Substitutable [a] where
   apply = map . apply
   ftv = foldr (Set.union . ftv) Set.empty
 
-instance Substitutable TE.TypeEnv where
-  apply s (TE.TypeEnv tys) = TE.TypeEnv $ Map.map (apply s) tys
-  ftv (TE.TypeEnv tys) = ftv $ Map.elems tys
+instance Substitutable TypeEnv.TypeEnv where
+  apply s (TypeEnv.TypeEnv tys) = TypeEnv.TypeEnv $ Map.map (apply s) tys
+  ftv (TypeEnv.TypeEnv tys) = ftv $ Map.elems tys
 
-runInfer :: TE.TypeEnv -> Infer (Type, [Constraint]) -> Either TypeError (Type, [Constraint])
-runInfer env m
-  = runExcept $ evalStateT (runReaderT m env) initInfer
+runInfer :: TypeEnv.TypeEnv -> Infer Type -> Compiler (Type, [Constraint])
+runInfer typeEnv i
+  = do (ty, cs) <- flip evalStateT initInfer $ runWriterT i
+       return (ty, appEndo cs [])
+  where initInfer = InferState {
+          typeVarCount = 0,
+          typeEnv
+        }
 
-inferExpr :: TE.TypeEnv -> AST -> Either TypeError Scheme
+inferExpr :: TypeEnv.TypeEnv -> Node -> Compiler Scheme
 inferExpr env ex
   = do (ty, cs) <- runInfer env (infer ex)
-       subst <- runSolve cs
-       Right $ closeOver $ apply subst ty
+       case runSolve cs of
+         Left err -> addDiagnostic err >> pure (Forall [] TAny)
+         Right subst -> return $ closeOver $ apply subst ty
 
-constraintsExpr :: TE.TypeEnv -> AST -> Either TypeError ([Constraint], Subst, Type, Scheme)
-constraintsExpr env ex
+-- | Return the internal constraints used in solving the type of a node
+constraints :: TypeEnv.TypeEnv -> Node -> Compiler ([Constraint], Subst, Type, Scheme)
+constraints env ex
    = do (ty, cs) <- runInfer env (infer ex)
-        subst <- runSolve cs
-        let sc = closeOver $ apply subst ty
-        Right $ (cs, subst, ty, sc)
-
-insertEnv :: (BS.ByteString, Scheme) -> Infer a -> Infer a
-insertEnv (n, sc) m
-  = local scope m
-  where scope e = TE.extend (n, sc) (TE.delete n e)
+        case runSolve cs of
+          Left err -> do
+            addDiagnostic err
+            pure (cs, emptySubst, TAny, Forall [] TAny)
+          Right subst -> do
+            let sc = closeOver $ apply subst ty
+            pure (cs, subst, ty, sc)
 
 lookupEnv :: BS.ByteString -> Infer Type
 lookupEnv n
-  = do env <- ask
-       case TE.lookup n env of
-         Nothing -> throwError $ UnboundVariable n
+  = do env <- gets typeEnv
+       case TypeEnv.lookup n env of
+         Nothing -> lift $ lift $ addDiagnostic (UnboundVariableError n) >> pure TAny
          Just s  -> instantiate s
 
 letters :: [String]
@@ -110,8 +109,8 @@ letters = [1..] >>= flip replicateM ['a'..'z']
 fresh :: Infer Type
 fresh
   = do s <- get
-       put s { count = count s + 1 }
-       return $ TVar $ TV (letters !! count s)
+       put s { typeVarCount = typeVarCount s + 1 }
+       return $ TVar $ TV (letters !! typeVarCount s)
 
 instantiate :: Scheme -> Infer Type
 instantiate (Forall as t)
@@ -119,7 +118,7 @@ instantiate (Forall as t)
        let s = Subst $ Map.fromList $ zip as as'
        return $ apply s t
 
-generalize :: TE.TypeEnv -> Type -> Scheme
+generalize :: TypeEnv.TypeEnv -> Type -> Scheme
 generalize env t = Forall as t
   where as = Set.toList $ ftv t `Set.difference` ftv env
 
@@ -137,53 +136,60 @@ normalize (Forall  _ body) = Forall (map snd ord) (normtype body)
               Nothing -> error "type variable not in signature"
 
 closeOver :: Type -> Scheme
-closeOver = normalize . generalize TE.empty
+closeOver = normalize . generalize TypeEnv.empty
 
-infer :: AST -> Infer (Type, [Constraint])
+addConstraint :: Constraint -> Infer ()
+addConstraint c
+  = tell $ Endo ([c]<>)
 
-infer (Lit (VInt _))
-  = return (intType, [])
+forwardDeclare :: TypeEnv.TypeEnv -> Node -> Infer TypeEnv.TypeEnv
 
-infer (Lit (VText _))
-  = return (stringType, [])
-
-infer (Ref n)
-  = do t <- lookupEnv n
-       return (t, [])
-
-infer (Lam x e)
+forwardDeclare env FunctionDeclaration { name = Identifier { text }, params, body }
   = do tv <- fresh
-       (t, c) <- insertEnv (x, Forall [] tv) (infer e)
-       return (tv `TArr` t, c)
+       return $ TypeEnv.extend (text, Forall [] tv) env
 
-infer (Let n e1 e2)
-  = do env <- ask
-       (t1, c1) <- infer e1
-       case runSolve c1 of
-        Left err -> throwError err
-        Right sub -> do
-          let sc = generalize (apply sub env) (apply sub t1)
-          (t2, c2) <- insertEnv (n, sc) $ local (apply sub) (infer e2)
-          return (t2, c1 ++ c2)
+forwardDeclare env _ = return env
 
-infer (App e1 e2)
-  = do (t1, c1) <- infer e1
-       (t2, c2) <- infer e2
-       tv <- fresh
-       return (tv, c1 ++ c2 ++ [(t1, t2 `TArr` tv)])
+inferBindings :: TypeEnv.TypeEnv -> Type -> Node -> Infer TypeEnv.TypeEnv
 
-infer (If p t e)
-  = do (t1, c1) <- infer p
-       (t2, c2) <- infer t
-       (t3, c3) <- infer e
-       return (t2, c1 ++ c2 ++ c3 ++ [(t1, boolType), (t2, t3)])
+inferBindings env valTy BindPattern { name = Identifier { text } }
+  = return $ TypeEnv.singleton text $ Forall [] valTy
 
-inferTop :: TE.TypeEnv -> [(BS.ByteString, AST)] -> Either TypeError TE.TypeEnv
-inferTop env [] = Right env
-inferTop env ((name, ex):xs)
-  = case inferExpr env ex of
-      Left err -> Left err
-      Right ty -> inferTop (TE.extend (name, ty) env) xs
+infer :: Node -> Infer Type
+
+infer StringLiteral {}
+  = return stringType
+
+infer ReferenceExpression { name = Identifier { text } }
+  = lookupEnv text
+
+infer FunctionExpression { params, expr }
+  = do retTy <- fresh
+       newEnv <- foldM addEnv TypeEnv.empty params
+       scoped newEnv $ infer expr
+       return retTy
+  where addEnv env Param { bindings, typeExpr, defaultValue } = do
+          tv <- fresh
+          case typeExpr of
+            Just (_, x) -> do { ty' <- infer x; addConstraint (tv, ty'); }
+          case defaultValue of
+            Just (_, x) -> do { ty' <- infer x; addConstraint (tv, ty'); }
+          inferBindings env tv bindings
+
+scoped :: TypeEnv.TypeEnv -> Infer a -> Infer a
+scoped env' m
+  = do env <- gets typeEnv
+       modify $ \s -> s { typeEnv = TypeEnv.merge env env' }
+       res <- m
+       modify $ \s -> s { typeEnv = env }
+       return res
+
+-- inferTop :: TypeEnv.TypeEnv -> [(BS.ByteString, Node)] -> Compiler TypeEnv.TypeEnv
+-- inferTop env [] = Right env
+-- inferTop env ((name, ex):xs)
+--   = case inferExpr env ex of
+--       Left err -> Left err
+--       Right ty -> inferTop (TypeEnv.extend (name, ty) env) xs
 
 emptySubst :: Subst
 emptySubst = mempty
@@ -191,16 +197,12 @@ emptySubst = mempty
 compose :: Subst -> Subst -> Subst
 (Subst s1) `compose` (Subst s2) = Subst $ Map.map (apply (Subst s1)) s2 `Map.union` s1
 
-runSolve :: [Constraint] -> Either TypeError Subst
-runSolve cs = runExcept $ solver st
-  where st = (emptySubst, cs)
-
 occursCheck :: Substitutable a => TVar -> a -> Bool
 occursCheck a t = a `Set.member` ftv t
 
 bind :: TVar -> Type -> Solve Subst
 bind a t | t == TVar a     = return emptySubst
-         | occursCheck a t = throwError $ InfiniteType a t
+         | occursCheck a t = throwError (InfiniteTypeError a t)
          | otherwise       = return (Subst $ Map.singleton a t)
 
 unifyMany :: [Type] -> [Type] -> Solve Subst
@@ -209,20 +211,21 @@ unifyMany (t1 : ts1) (t2 : ts2)
   = do su1 <- unify t1 t2
        su2 <- unifyMany (apply su1 ts1) (apply su1 ts2)
        return $ su2 `compose` su1
-unifyMany t1 t2 = throwError $ UnificationMismatch t1 t2
+unifyMany t1 t2
+  = error "unexpected amount of types given to unifyMany"
 
 unify :: Type -> Type -> Solve Subst
 unify t1 t2 | t1 == t2 = return emptySubst
 unify (TVar v) t = v `bind` t
 unify t (TVar v) = v `bind` t
 unify (TArr t1 t2) (TArr t3 t4) = unifyMany [t1, t2] [t3, t4]
-unify t1 t2 = throwError $ UnificationFail t1 t2
+unify t1 t2 = throwError $ UnificationFailError t1 t2
+
+runSolve cs = runExcept $ solver (emptySubst, cs)
 
 solver :: Unifier -> Solve Subst
-solver (su, cs)
-  = case cs of
-     [] -> return su
-     ((t1, t2):cs0) -> do
-       su1 <- unify t1 t2
+solver (su, []) = pure su
+solver (su, (t1, t2):cs0)
+  = do su1 <- unify t1 t2
        solver (su1 `compose` su, apply su1 cs0)
 

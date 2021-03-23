@@ -7,8 +7,7 @@ import qualified Data.Text as T
 import Data.Void (Void)
 import Control.Monad.State
 import Control.Monad.Except
-import Control.Monad.Identity
-import Text.Megaparsec.Error (ParseErrorBundle)
+import Control.Monad.Writer
 
 import Language.Bolt.Type
 import Language.Bolt.CST
@@ -18,61 +17,63 @@ data CompilerError
   = HasFatalDiagnosticError
   deriving (Eq, Show, Ord)
 
-newtype DiagnosticBundle
-  = DiagnosticBundle [Diagnostic]
-  deriving (Eq, Show)
-
-instance Semigroup DiagnosticBundle where
-  DiagnosticBundle a <> DiagnosticBundle b = DiagnosticBundle $ a <> b
-
-instance Monoid DiagnosticBundle where
-  mempty = DiagnosticBundle []
+data ParseItem
+  = ParseLabel T.Text
+  | ParseText T.Text
+  | ParseEOF
+  deriving (Show)
 
 data Diagnostic
-  = ParseDiagnostic {
-      errorBundle :: ParseErrorBundle T.Text Void
+  = ParseError {
+      fName :: String,
+      fLine :: Int,
+      fColumn :: Int,
+      actual :: Maybe ParseItem,
+      expected :: [ParseItem]
     }
-  | InfiniteTypeDiagnostic {
-      varName :: BS.ByteString,
+  | InfiniteTypeError {
+      typeVar :: TVar,
       ty :: Type
     }
-  | OccursCheckDiagnostic {
+  | OccursCheckError {
       varName :: BS.ByteString
     }
-  deriving (Eq, Show)
+  | UnboundVariableError {
+      varName :: BS.ByteString
+    }
+  | UnificationFailError {
+      leftType :: Type,
+      rightType :: Type
+    }
+  deriving (Show)
 
 data CompilerState = CompilerState {
-    diagnostics :: [Diagnostic],
-    sourceFiles :: Map.Map FilePath Node,
-    origNodes :: HashMap.HashMap AST Node
+    sourceFiles :: Map.Map FilePath Node
   }
 
-type CompilerT a = ExceptT CompilerError (StateT CompilerState a)
+type Compiler = ExceptT CompilerError (StateT CompilerState (Writer [Diagnostic]))
 
-type Compiler = CompilerT Identity
+addSourceFile :: String -> Node -> Compiler ()
+addSourceFile filename node 
+  = modify $ \s@CompilerState { sourceFiles } -> s {
+      sourceFiles = Map.insert filename node sourceFiles
+    }
 
-addSourceFile filename node s@CompilerState { sourceFiles }
-  = s { sourceFiles = Map.insert filename node sourceFiles }
+addDiagnostic :: Diagnostic -> Compiler ()
+addDiagnostic d
+  = tell [ d ]
 
-addDiagnostic d s@CompilerState { diagnostics }
-  = s { diagnostics = d : diagnostics }
-
-setOrigNode :: AST -> Node -> CompilerState -> CompilerState
-setOrigNode ast cst s
-  = s { origNodes = HashMap.insert ast cst (origNodes s) }
-
-abort :: Compiler ()
-abort
+abortCompilation :: Compiler ()
+abortCompilation
   = throwError HasFatalDiagnosticError
 
-runCompiler :: Compiler a -> (DiagnosticBundle, Maybe a)
+runCompiler :: Compiler a -> ([Diagnostic], Maybe a)
 runCompiler c
-  = case (flip runState s . runExceptT) c of
-      (Left _, s) -> (DiagnosticBundle $ diagnostics s, Nothing)
-      (Right x, s) -> (DiagnosticBundle $ diagnostics s, Just x)
-  where s = CompilerState {
-              sourceFiles = Map.empty,
-              diagnostics = [],
-              origNodes = HashMap.empty
+  = case x of
+      (Left _, s) -> (ds, Nothing)
+      (Right val, s) -> (ds, Just val)
+  where (x, ds) = (runWriter . flip runStateT s . runExceptT) c
+        s = CompilerState {
+              sourceFiles = Map.empty
             }
 

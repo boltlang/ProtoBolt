@@ -54,7 +54,7 @@ cli ParseDumpOptions { files, nodeType }
        mapM_ (Char8.putStrLn . encode) xs
   where f fname
           = do s <- TIO.readFile fname
-               let (diags, x) = parse pFile fname s
+               let (diags, x) = runCompiler $ parse pFile fname s
                return x
 
 cli ExecOptions { files }
